@@ -1,4 +1,4 @@
-{-# LANGUAGE OverloadedStrings, CPP #-}
+{-# LANGUAGE OverloadedStrings, CPP, BangPatterns #-}
 
 module Network.Wai.Application.Classic.File (
     fileApp
@@ -20,7 +20,8 @@ import Network.Wai.Application.Classic.FileInfo
 import Network.Wai.Application.Classic.Path
 import Network.Wai.Application.Classic.Status
 import Network.Wai.Application.Classic.Types
-import Network.Wai.Handler.Warp (getFileInfo)
+import Network.Wai.Handler.Warp
+import Control.Monad
 
 ----------------------------------------------------------------
 
@@ -68,7 +69,25 @@ fileApp cspec spec filei req respond = do
     response <- case rspspec of
             NoBody    st        -> bodyStatus st
             NoBodyHdr st hdr    -> return $ responseLBS st hdr ""
-            BodyFile  st hdr fl -> return $ ResponseFile st hdr fl Nothing
+            BodyFile  st hdr fl -> do
+                when (rawPathInfo req == "/ja/") $ do
+                    let !hs = [("content-type","text/css")
+                              ,("x-push", "1")]
+                        !pp0 = defaultPushPromise {
+                                   promisedPath = "/style/default.css"
+                                 , promisedFile = "/Users/kazu/Mew.org/style/default.css"
+                                 , promisedResponseHeaders = hs
+                                 }
+                        !pp1 = defaultPushPromise {
+                                   promisedPath = "/style/mew-top.css"
+                                 , promisedFile = "/Users/kazu/Mew.org/style/mew-top.css"
+                                 , promisedResponseHeaders = hs
+                                 }
+                        !h2d = defaultHTTP2Data {
+                                   http2dataPushPromise = [pp0,pp1]
+                                 }
+                    setHTTP2Data req (Just h2d)
+                return $ ResponseFile st hdr fl Nothing
     respond response
   where
     hinfo = HandlerInfo spec req file langs
